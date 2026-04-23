@@ -98,9 +98,25 @@ div[data-testid="stVerticalBlock"] { gap: 0 !important; }
 }
 .stTabs [data-baseweb="tab-highlight"] { display: none !important; }
 
+/* ── FIX GAP ANTARA TAB DAN KONTEN ── */
+.stTabs { gap: 0 !important; }
+div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
+    gap: 0 !important;
+    padding: 0 !important;
+}
+/* Hapus margin/padding di dalam tab panel */
+.stTabs [data-baseweb="tab-panel"] > div {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+/* Hapus gap default semua stVerticalBlock */
+section[data-testid="stMain"] .stVerticalBlock {
+    gap: 0 !important;
+}
+
 /* ── PAGE CONTENT WRAPPER ── */
 .page-content {
-    padding: 16px 20px;
+    padding: 14px 20px;
     background: #f0f2f6;
     min-height: calc(100vh - 100px);
 }
