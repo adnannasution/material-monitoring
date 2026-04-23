@@ -3,6 +3,8 @@ database.py — Koneksi PostgreSQL, migrasi, dan helper query
 """
 import os
 import json
+import decimal
+import datetime
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2 import pool
@@ -111,6 +113,20 @@ def get_state(key):
     return None
 
 
+class _JSONEncoder(json.JSONEncoder):
+    """Handle Decimal, date, datetime dari PostgreSQL."""
+    def default(self, obj):
+        if isinstance(obj, decimal.Decimal):
+            return float(obj)
+        if isinstance(obj, (datetime.datetime, datetime.date)):
+            return str(obj)
+        return super().default(obj)
+
+
+def _dumps(v):
+    return json.dumps(v, cls=_JSONEncoder)
+
+
 def set_state(key, value):
     execute(
         """
@@ -118,7 +134,7 @@ def set_state(key, value):
         VALUES (%s, %s, NOW())
         ON CONFLICT(key) DO UPDATE SET value=%s, updated_at=NOW()
         """,
-        (key, json.dumps(value), json.dumps(value)),
+        (key, _dumps(value), _dumps(value)),
     )
 
 
