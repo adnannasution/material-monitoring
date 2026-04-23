@@ -83,8 +83,16 @@ def n(v):
 
 
 def to_excel_bytes(df: pd.DataFrame, sheet_name="Sheet1") -> bytes:
-    # Bersihkan data sebelum ditulis ke Excel (hindari mixed types / nilai invalid)
     df = df.copy()
+    # Hapus kolom timestamp DB (created_at, updated_at) — tidak perlu di export
+    drop_cols = [c for c in df.columns if c in ("created_at", "updated_at")]
+    if drop_cols:
+        df = df.drop(columns=drop_cols)
+    # Strip timezone dari kolom datetime agar Excel tidak error
+    for col in df.columns:
+        if hasattr(df[col], "dt") and df[col].dtype.tz is not None:
+            df[col] = df[col].dt.tz_localize(None)
+    # Konversi kolom object ke string bersih (hindari mixed types)
     for col in df.columns:
         if df[col].dtype == object:
             df[col] = df[col].fillna("").astype(str)
