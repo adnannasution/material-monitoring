@@ -83,6 +83,12 @@ def n(v):
 
 
 def to_excel_bytes(df: pd.DataFrame, sheet_name="Sheet1") -> bytes:
+    # Bersihkan data sebelum ditulis ke Excel (hindari mixed types / nilai invalid)
+    df = df.copy()
+    for col in df.columns:
+        if df[col].dtype == object:
+            df[col] = df[col].fillna("").astype(str)
+            df[col] = df[col].replace("nan", "").replace("None", "")
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
         df.to_excel(writer, sheet_name=sheet_name, index=False)
@@ -1347,12 +1353,3 @@ with tab_reset:
                     st.error(f"❌ Gagal reset: {e}")
         else:
             st.warning("Ketik RESET (huruf kapital) untuk konfirmasi.")
-
-
-# ─── Footer ──────────────────────────────────────────────────
-st.markdown("---")
-st.markdown(
-    '<p style="text-align:center;font-size:11px;color:#9ca3af;">'
-    'PRISMA · TA-ex System | Material Reservation &amp; PR Management | Python Streamlit</p>',
-    unsafe_allow_html=True
-)
