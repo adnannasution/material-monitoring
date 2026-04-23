@@ -262,71 +262,129 @@ tabs = st.tabs([
 
 
 # ════════════════════════════════════════════════════════════════
+# PAGINATION HELPER
+# ════════════════════════════════════════════════════════════════
+def render_pagination(key, total, page_size):
+    """Render Prev/Next pagination, return (page, offset)."""
+    pg_key = f"pg_{key}"
+    if pg_key not in st.session_state:
+        st.session_state[pg_key] = 1
+
+    total_pages = max(1, -(-total // page_size))  # ceiling division
+    page = st.session_state[pg_key]
+    # Clamp
+    page = max(1, min(page, total_pages))
+    st.session_state[pg_key] = page
+    offset = (page - 1) * page_size
+
+    # Render bar
+    c1, c2, c3, c4, c5 = st.columns([1, 1, 3, 1, 1])
+    with c1:
+        if st.button("⟨⟨ Pertama", key=f"{key}_first", disabled=(page <= 1)):
+            st.session_state[pg_key] = 1
+            st.rerun()
+    with c2:
+        if st.button("⟨ Prev", key=f"{key}_prev", disabled=(page <= 1)):
+            st.session_state[pg_key] = page - 1
+            st.rerun()
+    with c3:
+        start_row = offset + 1
+        end_row   = min(page * page_size, total)
+        st.markdown(
+            f'<div style="text-align:center;font-size:12px;color:#374151;padding:6px 0;">'
+            f'Halaman <b>{page}</b> dari <b>{total_pages}</b> &nbsp;|&nbsp; '
+            f'Baris <b>{start_row:,}</b> – <b>{end_row:,}</b> dari <b>{total:,}</b>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+    with c4:
+        if st.button("Next ⟩", key=f"{key}_next", disabled=(page >= total_pages)):
+            st.session_state[pg_key] = page + 1
+            st.rerun()
+    with c5:
+        if st.button("Terakhir ⟩⟩", key=f"{key}_last", disabled=(page >= total_pages)):
+            st.session_state[pg_key] = total_pages
+            st.rerun()
+
+    return page, offset
+
+
+# ════════════════════════════════════════════════════════════════
 # TAB 1 — TA-EX RESERVASI
 # ════════════════════════════════════════════════════════════════
 with tab_taex:
-    st.subheader("📦 TA-ex Reservasi")
+    # ── Header Row ──
+    st.markdown("### 📦 TA-ex Reservasi")
 
     # ── Filter Bar ──
-    col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
-    with col1:
-        taex_search = st.text_input("🔍 Cari", placeholder="Material, deskripsi, order...", key="taex_search")
-    with col2:
-        # Distinct PR values
-        pr_vals = query('SELECT DISTINCT pr FROM taex_reservasi WHERE pr IS NOT NULL ORDER BY pr LIMIT 500')
-        pr_options = [""] + [r["pr"] for r in pr_vals]
-        taex_pr_filter = st.selectbox("PR", pr_options, key="taex_pr_filter")
-    with col3:
-        taex_limit = st.selectbox("Baris", [100, 500, 1000, 5000], key="taex_limit")
-    with col4:
-        st.write("")
-        st.write("")
-        if st.button("🔄 Refresh", key="taex_refresh"):
-            st.cache_data.clear()
+    with st.container():
+        st.markdown('<div class="filter-bar">', unsafe_allow_html=True)
+        fc1, fc2, fc3 = st.columns([4, 3, 1])
+        with fc1:
+            taex_search = st.text_input(
+                "🔍 Cari",
+                placeholder="Material, deskripsi, order, equipment...",
+                key="taex_search",
+                label_visibility="collapsed",
+            )
+        with fc2:
+            pr_vals = query('SELECT DISTINCT pr FROM taex_reservasi WHERE pr IS NOT NULL ORDER BY pr LIMIT 500')
+            pr_options = ["Semua PR"] + [r["pr"] for r in pr_vals]
+            taex_pr_sel = st.selectbox("PR", pr_options, key="taex_pr_filter", label_visibility="collapsed")
+            taex_pr_filter = "" if taex_pr_sel == "Semua PR" else taex_pr_sel
+        with fc3:
+            taex_page_size = st.selectbox("Baris/hal", [100, 200, 500], key="taex_page_size", label_visibility="collapsed")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Upload & Download ──
-    col_ul, col_tpl, col_exp = st.columns([1, 1, 1])
-    with col_ul:
-        taex_file = st.file_uploader("📥 Upload Excel TA-ex", type=["xlsx", "xls", "csv"], key="taex_upload")
+    # ── Action Bar ──
+    ab1, ab2, ab3, ab4, ab5 = st.columns([2, 2, 2, 2, 1])
+    with ab1:
+        taex_file = st.file_uploader(
+            "Upload Excel", type=["xlsx","xls","csv"],
+            key="taex_upload", label_visibility="collapsed"
+        )
+    with ab2:
         if taex_file:
             upload_mode = st.radio(
-                "Mode Upload",
-                ["Tambahkan (UPSERT)", "Ganti Semua (Replace)"],
-                key="taex_upload_mode",
-                horizontal=True,
+                "Mode", ["Tambahkan (UPSERT)", "Ganti Semua"],
+                key="taex_upload_mode", horizontal=True, label_visibility="collapsed"
             )
-            if st.button("✅ Import TA-ex", key="taex_import_btn"):
-                with st.spinner(f"⏳ Membaca {taex_file.name}..."):
+            if st.button("✅ Import", key="taex_import_btn", use_container_width=True):
+                with st.spinner(f"⏳ Menyimpan {taex_file.name}..."):
                     try:
                         df_up = load_excel(taex_file)
                         mode = "append" if "Tambahkan" in upload_mode else "replace"
-                        with st.spinner(f"💾 Menyimpan {len(df_up):,} baris ke database..."):
-                            cnt = bulk_replace_taex(df_up, mode=mode)
-                        st.success(f"✅ {cnt:,} baris berhasil diimport!")
+                        cnt = bulk_replace_taex(df_up, mode=mode)
+                        st.success(f"✅ {cnt:,} baris diimport!")
                         st.cache_data.clear()
+                        if "pg_taex" in st.session_state:
+                            st.session_state["pg_taex"] = 1
                         st.rerun()
                     except Exception as e:
-                        st.error(f"❌ Gagal import: {e}")
+                        st.error(f"❌ {e}")
                         st.text(traceback.format_exc())
-
-    with col_tpl:
+        else:
+            st.markdown(
+                '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;'
+                'padding:8px 12px;font-size:12px;color:#1e40af;">'
+                '📥 Upload Excel TA-ex (.xlsx/.xls/.csv) — max 200MB</div>',
+                unsafe_allow_html=True
+            )
+    with ab3:
         tpl_cols = [
             "PlPl","Equipment","Order","Reserv.No.","Revision","Material","Itm",
             "Material Description","Reqmt Qty","Qty_Stock","PR","Item","Qty_PR",
             "Cost Ctrs","SLoc","Del","FIs","ICt","PG","Recipient","Unloading Point",
-            "Reqmt Date","Qty. f. avail.check","Qty Withdrawn","BUn","G/L Acct",
-            "Price","per","Crcy"
+            "Reqmt Date","Qty. f. avail.check","Qty Withdrawn","BUn","G/L Acct","Price","per","Crcy"
         ]
-        tpl_df = pd.DataFrame(columns=tpl_cols)
         st.download_button(
             "📋 Download Template",
-            data=to_excel_bytes(tpl_df, "Template TA-ex"),
+            data=to_excel_bytes(pd.DataFrame(columns=tpl_cols), "Template TA-ex"),
             file_name="Template_TAex_Reservasi.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key="taex_tpl_btn"
+            key="taex_tpl_btn", use_container_width=True
         )
-
-    with col_exp:
+    with ab4:
         if counts["taex"] > 0:
             df_exp = fetch_taex(search=taex_search, pr_filter=taex_pr_filter, limit=50000)
             if not df_exp.empty:
@@ -342,22 +400,31 @@ with tab_taex:
                     "qty_withdrawn":"Qty Withdrawn","uom":"BUn","gl_acct":"G/L Acct",
                     "res_price":"Price","res_per":"per","res_curr":"Crcy",
                 }
-                df_exp_renamed = df_exp.rename(columns=col_map)
                 st.download_button(
                     "📤 Export Excel",
-                    data=to_excel_bytes(df_exp_renamed, "TA-ex Reservasi"),
-                    file_name=f"TAex_Reservasi_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                    data=to_excel_bytes(df_exp.rename(columns=col_map), "TA-ex Reservasi"),
+                    file_name=f"TAex_{datetime.now().strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="taex_exp_btn"
+                    key="taex_exp_btn", use_container_width=True
                 )
+    with ab5:
+        st.write("")
+        if st.button("🔄", key="taex_refresh", help="Refresh data", use_container_width=True):
+            st.cache_data.clear()
+            if "pg_taex" in st.session_state:
+                st.session_state["pg_taex"] = 1
+            st.rerun()
 
-    # ── Tabel ──
-    df_taex = fetch_taex(search=taex_search, pr_filter=taex_pr_filter, limit=taex_limit)
-    if df_taex.empty:
+    # ── Pagination + Tabel ──
+    taex_total = counts["taex"]
+    if taex_total == 0:
         st.info("📭 Belum ada data. Upload file Excel untuk memulai.")
     else:
-        st.caption(f"Menampilkan {len(df_taex):,} dari {counts['taex']:,} baris")
-
+        taex_page, taex_offset = render_pagination("taex", taex_total, taex_page_size)
+        df_taex = fetch_taex(
+            search=taex_search, pr_filter=taex_pr_filter,
+            limit=taex_page_size, offset=taex_offset
+        )
         col_display = [
             "id","plant","equipment","order","reservno","revision",
             "material","itm","material_description","qty_reqmts","qty_stock",
@@ -370,20 +437,38 @@ with tab_taex:
         st.dataframe(
             df_taex[available],
             use_container_width=True,
-            height=500,
+            height=520,
             column_config={
-                "id": st.column_config.NumberColumn("ID", width="small"),
-                "plant": "PlPl",
-                "equipment": st.column_config.TextColumn("Equipment", width="medium"),
-                "order": st.column_config.TextColumn("Order", width="medium"),
-                "reservno": "Reserv.No.",
-                "material": st.column_config.TextColumn("Material", width="medium"),
-                "material_description": st.column_config.TextColumn("Material Description", width="large"),
-                "qty_reqmts": st.column_config.NumberColumn("Reqmt Qty"),
-                "qty_stock": st.column_config.NumberColumn("Qty_Stock"),
-                "pr": "PR",
-                "qty_pr": st.column_config.NumberColumn("Qty_PR"),
-                "res_price": st.column_config.NumberColumn("Price"),
+                "id":                    st.column_config.NumberColumn("ID",          width="small"),
+                "plant":                 st.column_config.TextColumn("PlPl",          width="small"),
+                "equipment":             st.column_config.TextColumn("Equipment",     width="medium"),
+                "order":                 st.column_config.TextColumn("Order",         width="medium"),
+                "reservno":              st.column_config.TextColumn("Reserv.No.",    width="medium"),
+                "revision":              st.column_config.TextColumn("Revision",      width="small"),
+                "material":              st.column_config.TextColumn("Material",      width="medium"),
+                "itm":                   st.column_config.TextColumn("Itm",           width="small"),
+                "material_description":  st.column_config.TextColumn("Material Description", width="large"),
+                "qty_reqmts":            st.column_config.NumberColumn("Reqmt Qty",   width="small"),
+                "qty_stock":             st.column_config.NumberColumn("Qty Stock",   width="small"),
+                "pr":                    st.column_config.TextColumn("PR",            width="medium"),
+                "item":                  st.column_config.TextColumn("Item",          width="small"),
+                "qty_pr":                st.column_config.NumberColumn("Qty PR",      width="small"),
+                "cost_ctrs":             st.column_config.TextColumn("Cost Ctrs",     width="medium"),
+                "sloc":                  st.column_config.TextColumn("SLoc",          width="small"),
+                "del":                   st.column_config.TextColumn("Del",           width="small"),
+                "fis":                   st.column_config.TextColumn("FIs",           width="small"),
+                "ict":                   st.column_config.TextColumn("ICt",           width="small"),
+                "pg":                    st.column_config.TextColumn("PG",            width="small"),
+                "recipient":             st.column_config.TextColumn("Recipient",     width="medium"),
+                "unloading_point":       st.column_config.TextColumn("Unloading Point", width="medium"),
+                "reqmts_date":           st.column_config.TextColumn("Reqmt Date",    width="medium"),
+                "qty_f_avail_check":     st.column_config.NumberColumn("Qty f.avail", width="small"),
+                "qty_withdrawn":         st.column_config.NumberColumn("Qty Withdrawn", width="small"),
+                "uom":                   st.column_config.TextColumn("BUn",           width="small"),
+                "gl_acct":               st.column_config.TextColumn("G/L Acct",      width="medium"),
+                "res_price":             st.column_config.NumberColumn("Price",        width="small"),
+                "res_per":               st.column_config.NumberColumn("per",          width="small"),
+                "res_curr":              st.column_config.TextColumn("Crcy",           width="small"),
             },
             hide_index=True,
         )
@@ -393,24 +478,31 @@ with tab_taex:
 # TAB 2 — PRISMA RESERVASI
 # ════════════════════════════════════════════════════════════════
 with tab_prisma:
-    st.subheader("📋 PRISMA Reservasi")
+    st.markdown("### 📋 PRISMA Reservasi")
 
-    col1, col2, col3 = st.columns([3, 2, 1])
-    with col1:
-        pr_search = st.text_input("🔍 Cari", placeholder="Material, deskripsi...", key="pr_search")
-    with col2:
-        ord_vals = query('SELECT DISTINCT "order" FROM prisma_reservasi WHERE "order" IS NOT NULL ORDER BY "order" LIMIT 1000')
-        ord_options = [""] + [r["order"] for r in ord_vals]
-        pr_ord_filter = st.selectbox("Order", ord_options, key="pr_ord_filter")
-    with col3:
-        pr_limit = st.selectbox("Baris", [100, 500, 1000, 5000], key="pr_limit")
+    # ── Filter Bar ──
+    with st.container():
+        st.markdown('<div class="filter-bar">', unsafe_allow_html=True)
+        pfc1, pfc2, pfc3 = st.columns([4, 3, 1])
+        with pfc1:
+            pr_search = st.text_input(
+                "Cari", placeholder="Material, deskripsi, order...",
+                key="pr_search", label_visibility="collapsed"
+            )
+        with pfc2:
+            ord_vals = query('SELECT DISTINCT "order" FROM prisma_reservasi WHERE "order" IS NOT NULL ORDER BY "order" LIMIT 1000')
+            ord_options = ["Semua Order"] + [r["order"] for r in ord_vals]
+            pr_ord_sel = st.selectbox("Order", ord_options, key="pr_ord_filter", label_visibility="collapsed")
+            pr_ord_filter = "" if pr_ord_sel == "Semua Order" else pr_ord_sel
+        with pfc3:
+            pr_page_size = st.selectbox("Baris/hal", [100, 200, 500], key="pr_page_size", label_visibility="collapsed")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Action Buttons ──
-    col_sync, col_kk, col_exp = st.columns([1, 1, 1])
-
-    with col_sync:
-        if st.button("🔄 Sinkron dari TA-ex", key="sync_taex_btn"):
-            with st.spinner("⏳ Mengambil data TA-ex..."):
+    # ── Action Bar ──
+    pa1, pa2, pa3, pa4 = st.columns([2, 2, 2, 2])
+    with pa1:
+        if st.button("🔄 Sinkron dari TA-ex", key="sync_taex_btn", use_container_width=True):
+            with st.spinner("⏳ Sinkronisasi data TA-ex → PRISMA..."):
                 try:
                     all_taex = query("""
                         SELECT * FROM taex_reservasi
@@ -420,80 +512,72 @@ with tab_prisma:
                     """)
                     existing = query('SELECT "order", material, itm FROM prisma_reservasi')
                     exist_set = {(r["order"], r["material"], r["itm"]) for r in existing}
-
-                    new_rows, skip_count = [], 0
-                    for t in all_taex:
-                        key = (t["order"], t["material"], t["itm"])
-                        if key in exist_set:
-                            skip_count += 1
-                            continue
-                        new_rows.append(t)
-
+                    new_rows = [t for t in all_taex if (t["order"], t["material"], t["itm"]) not in exist_set]
+                    skip_count = len(all_taex) - len(new_rows)
                     if new_rows:
                         from psycopg2.extras import execute_values
                         from database import get_conn, release_conn
                         conn = get_conn()
                         try:
                             with conn.cursor() as cur:
-                                sql = """
+                                execute_values(cur, """
                                     INSERT INTO prisma_reservasi
                                     (plant, equipment, revision, "order", reservno, itm, material,
                                      material_description, del, fis, ict, pg, recipient, unloading_point,
                                      reqmts_date, qty_reqmts, uom)
                                     VALUES %s
-                                """
-                                vals = [(
+                                """, [(
                                     t["plant"], t["equipment"], t["revision"], t["order"],
                                     t["reservno"], t["itm"], t["material"],
                                     t["material_description"], t["del"], t["fis"], t["ict"],
                                     t["pg"], t["recipient"], t["unloading_point"],
                                     t["reqmts_date"], t["qty_reqmts"], t["uom"]
-                                ) for t in new_rows]
-                                execute_values(cur, sql, vals)
+                                ) for t in new_rows])
                             conn.commit()
                         finally:
                             release_conn(conn)
-
-                    st.success(f"✅ {len(new_rows)} baris baru ditambahkan, {skip_count} sudah ada.")
+                    st.success(f"✅ {len(new_rows):,} baris baru · {skip_count:,} sudah ada")
                     st.cache_data.clear()
+                    if "pg_prisma" in st.session_state:
+                        st.session_state["pg_prisma"] = 1
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Gagal sinkron: {e}")
-
-    with col_kk:
-        if st.button("📝 Buat Kertas Kerja", key="open_kk_modal"):
+    with pa2:
+        if st.button("📝 Buat Kertas Kerja", key="open_kk_modal", use_container_width=True):
             st.session_state["show_kk_form"] = True
-
-    with col_exp:
+    with pa3:
         df_pr_all = fetch_prisma(search=pr_search, order_filter=pr_ord_filter, limit=50000)
         if not df_pr_all.empty:
             st.download_button(
                 "📤 Export Excel",
                 data=to_excel_bytes(df_pr_all, "PRISMA Reservasi"),
-                file_name=f"PRISMA_Reservasi_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                file_name=f"PRISMA_{datetime.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="pr_exp_btn"
+                key="pr_exp_btn", use_container_width=True
             )
+    with pa4:
+        if st.button("🔄 Refresh", key="pr_refresh", use_container_width=True):
+            st.cache_data.clear()
+            if "pg_prisma" in st.session_state:
+                st.session_state["pg_prisma"] = 1
+            st.rerun()
 
     # ── Form Kertas Kerja ──
     if st.session_state.get("show_kk_form"):
         with st.expander("📝 Buat Kertas Kerja", expanded=True):
             kk_code_new = generate_kk_code()
             st.text_input("Kode KK (otomatis)", value=kk_code_new, disabled=True, key="kk_code_display")
-
             pg_type = st.selectbox(
                 "Planner Group",
                 ["", "TA (PG akhiran T)", "OH (PG akhiran O)", "Rutin (PG akhiran R)", "All (Semua PG)"],
                 key="kk_pg_type"
             )
-
             if pg_type:
-                # Filter WO berdasarkan PG
                 used_orders = {r["order"] for r in query(
                     'SELECT DISTINCT "order" FROM prisma_reservasi WHERE code_kertas_kerja IS NOT NULL'
                 )}
                 prisma_rows = query('SELECT DISTINCT "order", pg FROM prisma_reservasi WHERE code_kertas_kerja IS NULL')
-
                 def pg_match(pg_val, pg_type):
                     if not pg_val: return False
                     pg_val = str(pg_val).strip().upper()
@@ -501,14 +585,11 @@ with tab_prisma:
                     if "OH" in pg_type: return pg_val.endswith("O")
                     if "Rutin" in pg_type: return pg_val.endswith("R")
                     return True
-
                 available_orders = sorted({
                     r["order"] for r in prisma_rows
                     if r["order"] not in used_orders and pg_match(r["pg"], pg_type)
                 })
-
                 if available_orders:
-                    # Pilih Semua / Hapus Semua pakai flag terpisah, bukan set widget key langsung
                     col_all, col_none = st.columns(2)
                     if col_all.button("Pilih Semua", key="kk_select_all"):
                         st.session_state["kk_wo_default"] = available_orders
@@ -516,26 +597,21 @@ with tab_prisma:
                     if col_none.button("Hapus Semua", key="kk_deselect"):
                         st.session_state["kk_wo_default"] = []
                         st.rerun()
-
                     default_val = st.session_state.get("kk_wo_default", [])
                     selected_orders = st.multiselect(
                         f"Work Order ({len(available_orders)} tersedia)",
-                        available_orders,
-                        default=default_val,
-                        key="kk_wo_select"
+                        available_orders, default=default_val, key="kk_wo_select"
                     )
-
                     if st.button("✅ Buat Kertas Kerja", key="create_kk_btn"):
                         if not selected_orders:
                             st.warning("Pilih minimal satu Work Order!")
                         else:
-                            sel_set = set(selected_orders)
                             source = query("""
                                 SELECT * FROM prisma_reservasi
                                 WHERE "order" = ANY(%s)
                                   AND (del IS NULL OR UPPER(del) != 'X')
                                   AND (fis IS NULL OR UPPER(fis) != 'X')
-                            """, (list(sel_set),))
+                            """, (list(set(selected_orders)),))
                             if not source:
                                 st.warning("Tidak ada data yang memenuhi syarat.")
                             else:
@@ -545,29 +621,63 @@ with tab_prisma:
                                 st.session_state.kk_data = kk_rows
                                 st.session_state.kk_code = kk_code_new
                                 set_state("kk_current", {"code": kk_code_new, "data": kk_rows})
-                                st.success(f"✅ Kertas Kerja {kk_code_new} berhasil dibuat dengan {len(kk_rows)} baris!")
+                                st.success(f"✅ Kertas Kerja {kk_code_new} — {len(kk_rows):,} baris")
                                 st.session_state["show_kk_form"] = False
+                                st.session_state["kk_wo_default"] = []
                                 st.rerun()
                 else:
                     st.info("Tidak ada WO tersedia untuk Planner Group ini.")
-
             if st.button("✕ Batal", key="cancel_kk"):
                 st.session_state["show_kk_form"] = False
                 st.rerun()
 
-    # ── Tabel ──
-    df_pr = fetch_prisma(search=pr_search, order_filter=pr_ord_filter, limit=pr_limit)
-    if df_pr.empty:
+    # ── Pagination + Tabel ──
+    prisma_total = counts["prisma"]
+    if prisma_total == 0:
         st.info("📭 Belum ada data. Klik 'Sinkron dari TA-ex' untuk memulai.")
     else:
-        st.caption(f"Menampilkan {len(df_pr):,} dari {counts['prisma']:,} baris")
+        pr_page, pr_offset = render_pagination("prisma", prisma_total, pr_page_size)
+        df_pr = fetch_prisma(
+            search=pr_search, order_filter=pr_ord_filter,
+            limit=pr_page_size, offset=pr_offset
+        )
         col_show = [c for c in [
             "id","plant","equipment","revision","order","reservno","itm",
             "material","material_description","del","fis","ict","pg",
             "recipient","unloading_point","reqmts_date","qty_reqmts","uom",
             "pr_prisma","item_prisma","qty_pr_prisma","qty_stock_onhand","code_kertas_kerja"
         ] if c in df_pr.columns]
-        st.dataframe(df_pr[col_show], use_container_width=True, height=500, hide_index=True)
+        st.dataframe(
+            df_pr[col_show],
+            use_container_width=True,
+            height=520,
+            column_config={
+                "id":                   st.column_config.NumberColumn("ID",               width="small"),
+                "plant":                st.column_config.TextColumn("Plant",              width="small"),
+                "equipment":            st.column_config.TextColumn("Equipment",          width="medium"),
+                "revision":             st.column_config.TextColumn("Revision",           width="small"),
+                "order":                st.column_config.TextColumn("Order",              width="medium"),
+                "reservno":             st.column_config.TextColumn("Reservno",           width="medium"),
+                "itm":                  st.column_config.TextColumn("Itm",                width="small"),
+                "material":             st.column_config.TextColumn("Material",           width="medium"),
+                "material_description": st.column_config.TextColumn("Material Description", width="large"),
+                "del":                  st.column_config.TextColumn("Del",                width="small"),
+                "fis":                  st.column_config.TextColumn("FIs",                width="small"),
+                "ict":                  st.column_config.TextColumn("ICt",                width="small"),
+                "pg":                   st.column_config.TextColumn("PG",                 width="small"),
+                "recipient":            st.column_config.TextColumn("Recipient",          width="medium"),
+                "unloading_point":      st.column_config.TextColumn("Unloading Point",    width="medium"),
+                "reqmts_date":          st.column_config.TextColumn("Reqmts Date",        width="medium"),
+                "qty_reqmts":           st.column_config.NumberColumn("Qty Reqmts",       width="small"),
+                "uom":                  st.column_config.TextColumn("UoM",                width="small"),
+                "pr_prisma":            st.column_config.TextColumn("PR Prisma",          width="medium"),
+                "item_prisma":          st.column_config.TextColumn("Item",               width="small"),
+                "qty_pr_prisma":        st.column_config.NumberColumn("Qty PR",           width="small"),
+                "qty_stock_onhand":     st.column_config.NumberColumn("Qty Stock Onhand", width="small"),
+                "code_kertas_kerja":    st.column_config.TextColumn("Code KK",            width="medium"),
+            },
+            hide_index=True,
+        )
 
 
 # ════════════════════════════════════════════════════════════════
