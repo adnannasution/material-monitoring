@@ -508,19 +508,22 @@ with tab_prisma:
                 })
 
                 if available_orders:
+                    # Pilih Semua / Hapus Semua pakai flag terpisah, bukan set widget key langsung
+                    col_all, col_none = st.columns(2)
+                    if col_all.button("Pilih Semua", key="kk_select_all"):
+                        st.session_state["kk_wo_default"] = available_orders
+                        st.rerun()
+                    if col_none.button("Hapus Semua", key="kk_deselect"):
+                        st.session_state["kk_wo_default"] = []
+                        st.rerun()
+
+                    default_val = st.session_state.get("kk_wo_default", [])
                     selected_orders = st.multiselect(
                         f"Work Order ({len(available_orders)} tersedia)",
                         available_orders,
+                        default=default_val,
                         key="kk_wo_select"
                     )
-
-                    col_all, col_none = st.columns(2)
-                    if col_all.button("Pilih Semua", key="kk_select_all"):
-                        st.session_state["kk_wo_select"] = available_orders
-                        st.rerun()
-                    if col_none.button("Hapus Semua", key="kk_deselect"):
-                        st.session_state["kk_wo_select"] = []
-                        st.rerun()
 
                     if st.button("✅ Buat Kertas Kerja", key="create_kk_btn"):
                         if not selected_orders:
