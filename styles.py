@@ -1,9 +1,32 @@
 """
-styles.py — CSS kustom untuk Streamlit agar tampilan semirip mungkin dengan versi asli
+styles.py — CSS kustom untuk Streamlit: full page, minimal padding, tampilan profesional
 """
 
 CSS = """
 <style>
+/* ── FULL PAGE — hapus semua padding default Streamlit ── */
+.block-container {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 1rem !important;
+    max-width: 100% !important;
+}
+
+/* Sembunyikan header Streamlit default (hamburger menu area) */
+header[data-testid="stHeader"] {
+    height: 0px !important;
+    min-height: 0px !important;
+    display: none !important;
+}
+
+/* Sembunyikan footer "Made with Streamlit" */
+footer { display: none !important; }
+
+/* Sembunyikan toolbar kanan atas (record screen, dll) */
+[data-testid="stToolbar"] { display: none !important; }
+[data-testid="stDecoration"] { display: none !important; }
+
 /* ── FONT & BASE ── */
 html, body, [class*="css"] {
     font-family: Arial, sans-serif;
@@ -14,12 +37,15 @@ html, body, [class*="css"] {
 .app-header {
     background: #1a56db;
     color: white;
-    padding: 8px 20px;
+    padding: 0 20px;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-radius: 6px;
-    margin-bottom: 12px;
+    margin-bottom: 0;
+    margin-left: -1rem;
+    margin-right: -1rem;
+    margin-top: -0.5rem;
 }
 .app-header h1 {
     font-size: 16px;
@@ -32,17 +58,43 @@ html, body, [class*="css"] {
     color: rgba(255,255,255,0.8);
 }
 
+/* ── TABS ── */
+.stTabs [data-baseweb="tab-list"] {
+    background: #1245b5;
+    padding: 4px 8px 0;
+    gap: 2px;
+    margin-left: -1rem;
+    margin-right: -1rem;
+    padding-left: 12px;
+}
+.stTabs [data-baseweb="tab"] {
+    color: rgba(255,255,255,0.7);
+    font-weight: 600;
+    font-size: 12px;
+    padding: 8px 14px;
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+}
+.stTabs [aria-selected="true"] {
+    color: white !important;
+    border-bottom: 3px solid #60a5fa !important;
+    background: rgba(255,255,255,0.1) !important;
+}
+.stTabs [data-baseweb="tab-panel"] {
+    padding: 10px 0 0;
+}
+
 /* ── METRIC CARDS ── */
 .metric-card {
     border-radius: 8px;
-    padding: 12px 16px;
+    padding: 10px 16px;
     color: white;
     text-align: center;
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     margin-bottom: 8px;
 }
 .metric-card .val {
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 800;
     line-height: 1.1;
 }
@@ -71,7 +123,7 @@ html, body, [class*="css"] {
 .badge-purple { background: #ede9fe; color: #6d28d9; }
 .badge-teal   { background: #cffafe; color: #0e7490; }
 
-/* ── STATUS ── */
+/* ── STATUS TRACKING ── */
 .trk-status {
     display: inline-flex;
     align-items: center;
@@ -120,60 +172,47 @@ html, body, [class*="css"] {
     font-family: monospace;
     font-weight: 700;
 }
-.audit-col-badge {
-    display: inline-block;
-    background: #fef3c7;
-    color: #92400e;
-    padding: 1px 7px;
-    border-radius: 3px;
-    font-size: 11px;
-    font-weight: 700;
-}
 
 /* ── STREAMLIT OVERRIDES ── */
 .stDataFrame { border: 1px solid #e5e7eb; border-radius: 4px; }
-div[data-testid="stSidebar"] { background: #f8fafc; }
+
+/* Sidebar hidden by default */
+div[data-testid="stSidebar"] { display: none !important; }
+div[data-testid="collapsedControl"] { display: none !important; }
+
+/* Button styling */
 .stButton > button {
     border-radius: 3px;
     font-size: 12px;
     font-weight: 500;
     padding: 5px 14px;
 }
-.stButton > button[kind="primary"] {
-    background: #1a56db;
-    color: white;
-    border: none;
-}
-.stButton > button[kind="primary"]:hover {
-    background: #1245b5;
-}
-.stSelectbox label, .stTextInput label, .stNumberInput label {
+
+/* Label styling */
+.stSelectbox label, .stTextInput label,
+.stNumberInput label, .stFileUploader label {
     font-size: 12px;
     font-weight: 600;
     color: #374151;
 }
 
-/* ── TABS ── */
-.stTabs [data-baseweb="tab-list"] {
-    background: #1245b5;
-    border-radius: 6px 6px 0 0;
-    padding: 4px 8px 0;
-    gap: 2px;
+/* ── FILTER BAR ── */
+.filter-bar {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
 }
-.stTabs [data-baseweb="tab"] {
-    color: rgba(255,255,255,0.7);
-    font-weight: 600;
-    font-size: 12px;
-    padding: 8px 14px;
-    border-bottom: 3px solid transparent;
+
+/* ── DATAFRAME full width ── */
+[data-testid="stDataFrame"] {
+    width: 100% !important;
 }
-.stTabs [aria-selected="true"] {
-    color: white !important;
-    border-bottom: 3px solid #60a5fa !important;
-    background: rgba(255,255,255,0.1) !important;
-}
-.stTabs [data-baseweb="tab-panel"] {
-    padding: 12px 0 0;
+
+/* ── REMOVE TOP PADDING dari tiap elemen ── */
+div[data-testid="stVerticalBlock"] > div:first-child {
+    padding-top: 0 !important;
 }
 
 /* ── UPLOAD ZONE ── */
@@ -187,19 +226,8 @@ div[data-testid="stSidebar"] { background: #f8fafc; }
     margin-bottom: 12px;
 }
 
-/* ── PROGRESS ── */
-.progress-text {
-    font-size: 12px;
-    color: #6b7280;
-    margin-top: 4px;
-}
-
-/* ── TABLE STYLES ── */
-.dataframe-container {
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    overflow: auto;
-}
+/* Reduce gap antar elemen */
+.element-container { margin-bottom: 0.25rem !important; }
 </style>
 """
 
